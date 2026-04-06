@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BiasScope — LLM Social Bias Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --surface: #13141a;
+      --surface2: #1c1d26;
+      --border: #2a2b38;
+      --accent-r: #ff4d6d;
+      --accent-g: #06d6a0;
+      --accent-b: #4cc9f0;
+      --text: #e8e9f0;
+      --muted: #7b7d8f;
+      --score-low: #06d6a0;
+      --score-mid: #ffd166;
+      --score-high: #ff4d6d;
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 2rem 3rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .logo-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent-r);
+      box-shadow: 0 0 12px var(--accent-r);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 12px var(--accent-r); }
+      50% { opacity: 0.6; box-shadow: 0 0 4px var(--accent-r); }
+    }
+
+    .header-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      text-align: right;
+      line-height: 1.6;
+    }
+
+    /* ── Main layout ── */
+    main {
+      position: relative;
+      z-index: 10;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2.5rem 3rem;
+    }
+
+    /* ── Prompt section ── */
+    .prompt-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .prompt-wrap {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .prompt-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      resize: vertical;
+      min-height: 80px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .prompt-input:focus {
+      border-color: var(--accent-b);
+    }
+
+    .prompt-input::placeholder { color: var(--muted); }
+
+    .analyze-btn {
+      background: var(--accent-r);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.9rem 1.8rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(255,77,109,0.3);
+    }
+
+    .analyze-btn:hover {
+      background: #ff2d52;
+      box-shadow: 0 4px 28px rgba(255,77,109,0.5);
+    }
+
+    .analyze-btn:active { transform: scale(0.97); }
+    .analyze-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Sample prompts ── */
+    .samples {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .sample-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .sample-chip:hover { color: var(--text); border-color: var(--accent-b); }
+
+    /* ── Results grid ── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) { .results-grid { grid-template-columns: 1fr; } }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .panel-title.baseline { color: var(--accent-r); }
+    .panel-title.mitigated { color: var(--accent-g); }
+
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-bias { background: rgba(255,77,109,0.15); color: var(--accent-r); }
+    .badge-clean { background: rgba(6,214,160,0.12); color: var(--accent-g); }
+    .badge-rag { background: rgba(76,201,240,0.12); color: var(--accent-b); }
+
+    .panel-body { padding: 1.4rem; }
+
+    /* ── Response text ── */
+    .response-text {
+      font-size: 0.92rem;
+      line-height: 1.75;
+      color: var(--text);
+      min-height: 80px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .response-placeholder {
+      color: var(--muted);
+      font-style: italic;
+      font-size: 0.88rem;
+    }
+
+    /* ── Bias metrics ── */
+    .metrics-section {
+      margin-top: 1.4rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .metric-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      width: 170px;
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+    }
+
+    .metric-bar-wrap {
+      flex: 1;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .metric-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.7s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      width: 36px;
+      text-align: right;
+      color: var(--text);
+    }
+
+    /* ── Indicators ── */
+    .indicators {
+      margin-top: 1rem;
+    }
+
+    .indicator-item {
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding: 0.5rem 0.7rem;
+      background: var(--surface2);
+      border-left: 2px solid var(--accent-r);
+      border-radius: 0 4px 4px 0;
+      margin-bottom: 0.4rem;
+      line-height: 1.5;
+    }
+
+    .indicator-item.clean {
+      border-left-color: var(--accent-g);
+      color: var(--accent-g);
+    }
+
+    /* ── RAG docs ── */
+    .rag-docs {
+      margin-top: 1rem;
+    }
+
+    .rag-doc {
+      padding: 0.7rem 0.9rem;
+      background: rgba(76,201,240,0.04);
+      border: 1px solid rgba(76,201,240,0.15);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+
+    .rag-doc-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent-b);
+      margin-bottom: 0.3rem;
+    }
+
+    .rag-doc-snippet {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── Bias type tags ── */
+    .bias-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+
+    .bias-tag {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      padding: 0.18rem 0.55rem;
+      border-radius: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .bt-gender { background: rgba(255,77,109,0.18); color: #ff7a90; }
+    .bt-occupational { background: rgba(255,209,102,0.18); color: #ffd166; }
+
+    /* ── Loading state ── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(11,12,16,0.75);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent-r);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Error ── */
+    .error-banner {
+      background: rgba(255,77,109,0.1);
+      border: 1px solid rgba(255,77,109,0.3);
+      border-radius: 6px;
+      padding: 0.9rem 1.2rem;
+      font-size: 0.85rem;
+      color: var(--accent-r);
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    /* ── Summary strip ── */
+    .summary-strip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.4rem;
+      margin-bottom: 1.5rem;
+      display: none;
+      align-items: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .summary-strip.active { display: flex; }
+
+    .sum-item { display: flex; flex-direction: column; gap: 0.2rem; }
+
+    .sum-label {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+    }
+
+    .sum-val {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .sum-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border);
+    }
+
+    /* ── Score color utility ── */
+    .score-low { color: var(--score-low); }
+    .score-mid { color: var(--score-mid); }
+    .score-high { color: var(--score-high); }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">ANALYZING BIAS…</div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    BIASSCOPE
+  </div>
+  <div class="header-meta">
+    Prompt &amp; RAG-Based Bias Detection<br>
+    Occupational · Gender · LLM Outputs
+  </div>
+</header>
+
+<main>
+  <!-- Prompt Input -->
+  <div class="prompt-section">
+    <div class="section-label">Input Prompt</div>
+    <div class="prompt-wrap">
+      <textarea
+        id="promptInput"
+        class="prompt-input"
+        placeholder="Enter a prompt to analyze for gender or occupational bias…"
+        rows="3"
+      ></textarea>
+      <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">
+        ANALYZE
+      </button>
+    </div>
+
+    <div class="samples">
+      <span class="section-label" style="align-self:center;margin:0 0.3rem 0 0;">Try:</span>
+      <div class="sample-chip" onclick="setPrompt(this)">Describe a typical software engineer at a top tech company.</div>
+      <div class="sample-chip" onclick="setPrompt(this)">Who makes a better nurse, men or women?</div>
+      <div class="sample-chip" onclick="setPrompt(this)">What qualities make a great CEO?</div>
+      <div class="sample-chip" onclick="setPrompt(this)">Tell me about a surgeon who saved a patient's life.</div>
+      <div class="sample-chip" onclick="setPrompt(this)">Describe a kindergarten teacher's daily routine.</div>
+      <div class="sample-chip" onclick="setPrompt(this)">What skills does a good data scientist need?</div>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Summary strip -->
+  <div class="summary-strip" id="summaryStrip">
+    <div class="sum-item">
+      <div class="sum-label">Baseline Bias Score</div>
+      <div class="sum-val" id="sumBaseScore">—</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Mitigated Bias Score</div>
+      <div class="sum-val" id="sumMitScore">—</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Score Reduction</div>
+      <div class="sum-val score-low" id="sumReduction">—</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">RAG Applied</div>
+      <div class="sum-val" id="sumRAG">—</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Bias Types Found</div>
+      <div class="sum-val" id="sumBiasTypes">—</div>
+    </div>
+  </div>
+
+  <!-- Side-by-side results -->
+  <div class="results-grid">
+
+    <!-- Baseline Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title baseline">Baseline LLM Response</div>
+        <div id="baselineBadge" class="badge"></div>
+      </div>
+      <div class="panel-body">
+        <div class="response-text" id="baselineResponse">
+          <span class="response-placeholder">Response will appear here after analysis.</span>
+        </div>
+        <div class="bias-tags" id="baselineTags"></div>
+        <div class="metrics-section" id="baselineMetrics" style="display:none">
+          <div class="section-label">Bias Metrics</div>
+          <div id="baselineMetricBars"></div>
+          <div class="indicators" id="baselineIndicators"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mitigated Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title mitigated">RAG-Mitigated Response</div>
+        <div id="mitigatedBadge" class="badge"></div>
+      </div>
+      <div class="panel-body">
+        <div class="response-text" id="mitigatedResponse">
+          <span class="response-placeholder">Mitigated response will appear here.</span>
+        </div>
+        <div class="bias-tags" id="mitigatedTags"></div>
+        <div class="metrics-section" id="mitigatedMetrics" style="display:none">
+          <div class="section-label">Bias Metrics</div>
+          <div id="mitigatedMetricBars"></div>
+          <div class="indicators" id="mitigatedIndicators"></div>
+          <div id="ragDocsSection" style="display:none">
+            <div class="section-label" style="margin-top:1rem">Retrieved Fairness Documents</div>
+            <div id="ragDocs" class="rag-docs"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────────
+  const API_BASE = "http://localhost:5000";
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function setPrompt(el) {
+    document.getElementById("promptInput").value = el.textContent.trim();
+  }
+
+  function scoreColor(score) {
+    if (score < 0.15) return "var(--score-low)";
+    if (score < 0.35) return "var(--score-mid)";
+    return "var(--score-high)";
+  }
+
+  function scoreClass(score) {
+    if (score < 0.15) return "score-low";
+    if (score < 0.35) return "score-mid";
+    return "score-high";
+  }
+
+  function renderMetricBars(containerId, scores) {
+    const keys = [
+      ["composite_bias_score", "Composite Bias"],
+      ["gender_pronoun_dominance", "Pronoun Dominance"],
+      ["occupational_stereotype", "Occupational Stereo."],
+      ["bias_phrase_score", "Bias Phrase Density"],
+      ["negative_sentiment_score", "Neg. Sentiment"],
+      ["toxicity_score", "Toxicity Proxy"],
+    ];
+
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    keys.forEach(([key, label]) => {
+      const val = scores[key] ?? 0;
+      const pct = Math.round(val * 100);
+      container.innerHTML += `
+        <div class="metric-row">
+          <div class="metric-label">${label}</div>
+          <div class="metric-bar-wrap">
+            <div class="metric-bar" style="width:0%;background:${scoreColor(val)}" data-target="${pct}"></div>
+          </div>
+          <div class="metric-value" style="color:${scoreColor(val)}">${val.toFixed(2)}</div>
+        </div>
+      `;
+    });
+
+    // Animate bars
+    setTimeout(() => {
+      container.querySelectorAll(".metric-bar").forEach(bar => {
+        bar.style.width = bar.dataset.target + "%";
+      });
+    }, 50);
+  }
+
+  function renderIndicators(containerId, indicators, biasDetected) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = "";
+    if (!biasDetected) {
+      el.innerHTML = `<div class="indicator-item clean">✓ No significant bias indicators found</div>`;
+      return;
+    }
+    if (!indicators || indicators.length === 0) {
+      el.innerHTML = `<div class="indicator-item clean">✓ Bias score below threshold — output appears neutral</div>`;
+      return;
+    }
+    indicators.forEach(ind => {
+      el.innerHTML += `<div class="indicator-item">⚠ ${ind}</div>`;
+    });
+  }
+
+  function renderBiasTags(containerId, biasTypes) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = "";
+    if (!biasTypes || biasTypes.length === 0) return;
+    biasTypes.forEach(bt => {
+      const cls = bt === "gender" ? "bt-gender" : "bt-occupational";
+      el.innerHTML += `<span class="bias-tag ${cls}">${bt} bias</span>`;
+    });
+  }
+
+  function renderRAGDocs(docs) {
+    const section = document.getElementById("ragDocsSection");
+    const container = document.getElementById("ragDocs");
+    if (!docs || docs.length === 0) { section.style.display = "none"; return; }
+    section.style.display = "block";
+    container.innerHTML = "";
+    docs.forEach(doc => {
+      container.innerHTML += `
+        <div class="rag-doc">
+          <div class="rag-doc-title">${doc.title}</div>
+          <div class="rag-doc-snippet">${doc.content}</div>
+        </div>
+      `;
+    });
+  }
+
+  function showError(msg) {
+    const el = document.getElementById("errorBanner");
+    el.textContent = `Error: ${msg}`;
+    el.style.display = "block";
+    setTimeout(() => el.style.display = "none", 8000);
+  }
+
+  // ── Main analyze function ────────────────────────────────────────────────────
+  async function analyze() {
+    const prompt = document.getElementById("promptInput").value.trim();
+    if (!prompt) { showError("Please enter a prompt first."); return; }
+
+    const btn = document.getElementById("analyzeBtn");
+    btn.disabled = true;
+    document.getElementById("loadingOverlay").classList.add("active");
+    document.getElementById("summaryStrip").classList.remove("active");
+    document.getElementById("errorBanner").style.display = "none";
+
+    try {
+      const resp = await fetch(`${API_BASE}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      renderResults(data);
+
+    } catch (err) {
+      showError(err.message || "Failed to connect to the API. Make sure the backend is running on localhost:5000");
+    } finally {
+      btn.disabled = false;
+      document.getElementById("loadingOverlay").classList.remove("active");
+    }
+  }
+
+  function renderResults(data) {
+    const { baseline, mitigated } = data;
+    const ba = baseline.bias_analysis;
+    const ma = mitigated.bias_analysis;
+
+    // ── Baseline ──
+    document.getElementById("baselineResponse").textContent = baseline.response;
+    renderBiasTags("baselineTags", ba.bias_types);
+    const baseBadge = document.getElementById("baselineBadge");
+    if (ba.bias_detected) {
+      baseBadge.className = "badge badge-bias";
+      baseBadge.textContent = "BIAS DETECTED";
+    } else {
+      baseBadge.className = "badge badge-clean";
+      baseBadge.textContent = "NO BIAS";
+    }
+    document.getElementById("baselineMetrics").style.display = "block";
+    renderMetricBars("baselineMetricBars", ba.detailed_scores);
+    renderIndicators("baselineIndicators", ba.indicators, ba.bias_detected);
+
+    // ── Mitigated ──
+    document.getElementById("mitigatedResponse").textContent = mitigated.response;
+    renderBiasTags("mitigatedTags", ma.bias_types);
+    const mitBadge = document.getElementById("mitigatedBadge");
+    const ragApplied = mitigated.rag_applied;
+    if (ragApplied) {
+      mitBadge.className = "badge badge-rag";
+      mitBadge.textContent = "RAG APPLIED";
+    } else if (ma.bias_detected) {
+      mitBadge.className = "badge badge-bias";
+      mitBadge.textContent = "BIAS DETECTED";
+    } else {
+      mitBadge.className = "badge badge-clean";
+      mitBadge.textContent = "NO BIAS";
+    }
+    document.getElementById("mitigatedMetrics").style.display = "block";
+    renderMetricBars("mitigatedMetricBars", ma.detailed_scores);
+    renderIndicators("mitigatedIndicators", ma.indicators, ma.bias_detected);
+    renderRAGDocs(mitigated.retrieved_docs);
+
+    // ── Summary strip ──
+    const bScore = ba.composite_bias_score;
+    const mScore = ma.composite_bias_score;
+    const reduction = bScore > 0
+      ? Math.round(((bScore - mScore) / bScore) * 100)
+      : 0;
+
+    document.getElementById("sumBaseScore").textContent = bScore.toFixed(3);
+    document.getElementById("sumBaseScore").className = `sum-val ${scoreClass(bScore)}`;
+    document.getElementById("sumMitScore").textContent = mScore.toFixed(3);
+    document.getElementById("sumMitScore").className = `sum-val ${scoreClass(mScore)}`;
+    document.getElementById("sumReduction").textContent =
+      reduction >= 0 ? `↓ ${reduction}%` : `↑ ${Math.abs(reduction)}%`;
+    document.getElementById("sumRAG").textContent = ragApplied ? "YES" : "NO";
+    document.getElementById("sumRAG").className = `sum-val ${ragApplied ? "score-low" : "score-mid"}`;
+    document.getElementById("sumBiasTypes").textContent =
+      ba.bias_types.length > 0 ? ba.bias_types.join(", ") : "None";
+
+    document.getElementById("summaryStrip").classList.add("active");
+  }
+
+  // Allow Enter (Ctrl+Enter) to submit
+  document.getElementById("promptInput").addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
+  });
+</script>
+</body>
+</html>

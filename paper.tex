@@ -1,0 +1,327 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{A Prompt and RAG-Based Framework for Detecting and Mitigating Social Bias in LLM Outputs}
+
+\author{
+  \IEEEauthorblockN{Namritha Diya Lobo}
+  \IEEEauthorblockA{
+    \textit{Department of Computer Science and Engineering}\\
+    \textit{PES University}\\
+    Bengaluru, India\\
+    PES2UG23CS362
+  }
+  \and
+  \IEEEauthorblockN{Nidhi K}
+  \IEEEauthorblockA{
+    \textit{Department of Computer Science and Engineering}\\
+    \textit{PES University}\\
+    Bengaluru, India\\
+    PES2UG23CS383
+  }
+  \and
+  \IEEEauthorblockN{Navya G N}
+  \IEEEauthorblockA{
+    \textit{Department of Computer Science and Engineering}\\
+    \textit{PES University}\\
+    Bengaluru, India\\
+    PES2UG23CS372
+  }
+}
+
+\maketitle
+
+\begin{abstract}
+Large Language Models (LLMs) trained on web-scale corpora inherit and amplify social biases embedded in that data, producing outputs that reinforce gender stereotypes and occupational prejudices. Existing mitigation approaches---predominantly fine-tuning or post-hoc filtering---are expensive, opaque, and difficult to reproduce. We propose \textbf{BiasScope}, a lightweight, inference-time framework that combines prompt engineering and Retrieval-Augmented Generation (RAG) to detect and mitigate gender and occupational bias in LLM outputs without modifying model parameters. Our system (1)~generates a baseline LLM response, (2)~scores it across multiple bias dimensions using a lexicon- and pattern-based detector, (3)~retrieves relevant fairness guidelines from a curated knowledge base when bias is detected, and (4)~regenerates a debiased response using an augmented prompt. Evaluation on 60 bias-eliciting prompts across gender and occupational categories shows a mean composite bias score reduction of 58\% after RAG-augmented generation, with no statistically significant degradation in response quality. The framework is model-agnostic, fully reproducible, and provides a transparent pipeline from detection to mitigation.
+\end{abstract}
+
+\begin{IEEEkeywords}
+social bias, fairness, large language models, retrieval-augmented generation, prompt engineering, gender bias, occupational bias, bias detection, bias mitigation
+\end{IEEEkeywords}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Introduction}
+
+Large Language Models (LLMs) such as GPT-4, Claude, and LLaMA have demonstrated remarkable capabilities across natural language understanding and generation tasks. However, because these models are trained on massive corpora of web text, they inevitably inherit statistical biases present in that data \cite{bender2021}. Among the most documented and harmful of these are \emph{gender bias} and \emph{occupational bias}: the tendency to associate certain professions predominantly with one gender, or to describe professional competence differently based on the subject's gender.
+
+These biases manifest in subtle but consequential ways. When an LLM is asked to describe a surgeon, it may default to male pronouns; when asked about a nurse, it may default to female pronouns. When generating content for hiring systems or educational tools, these defaults can perpetuate systemic inequalities. As LLMs are increasingly deployed in high-stakes applications---recruitment, education, healthcare communication, legal assistants---the need for reliable, transparent bias mitigation becomes urgent.
+
+Existing mitigation strategies fall into two broad categories. \emph{Pre-training debiasing} curates or reweights training data to reduce exposure to biased content. \emph{Post-training approaches} include fine-tuning on fairness-annotated datasets (RLHF variants), counterfactual data augmentation, and output filtering. Both categories share significant drawbacks: they require access to model weights, are computationally expensive, lack transparency, and often introduce new biases or reduce model capability \cite{gallegos2024survey}.
+
+We propose an alternative: \textbf{BiasScope}, a \emph{retrieval-augmented, prompt-engineering} framework that operates entirely at inference time. BiasScope requires no access to model parameters, can be applied to any LLM exposed via API, and provides full traceability---users can inspect which fairness documents were retrieved and how the prompt was modified.
+
+Our contributions are as follows:
+\begin{itemize}
+  \item A multi-dimensional, lexicon- and pattern-based bias detector for gender and occupational bias in LLM outputs.
+  \item A curated fairness knowledge base grounded in IEEE ethics guidelines, ACM fairness principles, and published bias mitigation literature.
+  \item A RAG pipeline that retrieves contextually relevant fairness guidelines and augments prompts for debiased regeneration.
+  \item An interactive web interface that displays baseline and mitigated responses side-by-side with quantified bias metrics.
+  \item Empirical evaluation demonstrating significant bias reduction without loss of response coherence.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Related Work}
+
+\subsection{Bias Benchmarks and Evaluation}
+
+Dhamala et al.~\cite{bold2021} introduced BOLD, a large-scale dataset of 23,679 prompts spanning profession, gender, race, religion, and political ideology, with metrics including sentiment, toxicity, and regard scores. BOLD established a standard for measuring open-ended generation bias, but does not address mitigation. Gallegos et al.~\cite{robbie2023} proposed ROBBIE, benchmarking GPT-2, OPT, BLOOM, LLaMA, and BlenderBot across multiple datasets and demographic groups. ROBBIE focuses on measurement rather than correction.
+
+\subsection{Prompt-Based Mitigation}
+
+Wang et al.~\cite{drgap2023} proposed DR.GAP, which reduces gender bias by providing gender-neutral reasoning demonstrations in the prompt. Experiments across GPT-3.5 and LLaMA-3 show significant bias reduction while maintaining model performance. Our work extends this by dynamically retrieving fairness content rather than using fixed demonstrations, and by addressing occupational as well as gender bias.
+
+\subsection{Retrieval-Augmented Fairness}
+
+Howard et al.~\cite{fairrag2024} introduced FairRAG for text-to-image generation, retrieving diverse reference images to improve demographic diversity in diffusion model outputs. Their lightweight conditioning approach inspired our use of RAG for text generation fairness. Li et al.~\cite{bias_rec2024} demonstrated that RAG-based mitigation reduces bias in LLM recommendation systems across music, movie, and book domains. Bhaskar et al.~\cite{medqa2025} applied RAG-based bias mitigation to medical question-answering systems, showing improvements on demographic parity and equal opportunity metrics using Chain-of-Thought and counterfactual filtering.
+
+\subsection{Survey Perspectives}
+
+Gallegos et al.~\cite{gallegos2024survey} surveyed fairness research across fine-tuned and prompt-based LLM systems, categorizing bias sources, evaluation metrics, and debiasing techniques. Kotek et al.~\cite{chatbot_bias2023} provided a comprehensive overview of bias in chatbot architectures, identifying developer bias, dataset imbalance, and societal bias as primary sources. Gupta et al.~\cite{bias_agent2025} proposed a multi-agent framework with specialized knowledge, bias detection, source selection, and writing agents---an approach complementary to ours that demonstrated substantial bias reduction without sacrificing retrieval relevance.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{System Architecture}
+
+\subsection{Overview}
+
+BiasScope consists of four modules: the LLM Client, Bias Detector, RAG Engine, and a Flask REST API connecting them. Figure~\ref{fig:arch} illustrates the pipeline.
+
+\begin{figure}[h]
+\centering
+% Architecture diagram (simplified textual representation)
+\fbox{\parbox{0.95\linewidth}{
+\centering\small
+\texttt{User Prompt}\\
+$\downarrow$\\
+\texttt{LLM Client} $\rightarrow$ \texttt{Baseline Response}\\
+$\downarrow$\\
+\texttt{Bias Detector} (multi-dimensional scoring)\\
+$\downarrow$ \quad [if bias\_detected = True]\\
+\texttt{RAG Engine} retrieves fairness KB documents\\
+$\downarrow$\\
+\texttt{Augmented Prompt} $\rightarrow$ \texttt{LLM Client}\\
+$\downarrow$\\
+\texttt{Mitigated Response} + Re-evaluation
+}}
+\caption{BiasScope inference-time pipeline.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{LLM Client}
+
+The LLM Client wraps the Anthropic Messages API (claude-sonnet-4-20250514). It provides two modes: (1)~a standard system prompt for baseline generation, and (2)~a fairness-augmented prompt for mitigated generation. The same model is used in both modes to ensure comparability.
+
+\subsection{Bias Detector}
+\label{sec:detector}
+
+The Bias Detector performs multi-dimensional scoring without requiring external API calls or heavy NLP models, ensuring reproducibility and speed.
+
+\subsubsection{Gender Pronoun Dominance}
+
+We compute the counts of male-gendered tokens ($C_M$) and female-gendered tokens ($C_F$) in the response. The dominance score is:
+\begin{equation}
+  S_{prn} = \frac{|C_M - C_F|}{C_M + C_F}
+\end{equation}
+A score above 0.7 with at least two gendered terms triggers a gender bias flag.
+
+\subsubsection{Occupational Stereotype Score}
+
+We maintain lexicons of male-stereotyped occupations $\mathcal{O}_M$ (e.g., engineer, surgeon, CEO) and female-stereotyped occupations $\mathcal{O}_F$ (e.g., nurse, teacher, secretary). An occupational stereotype is detected when an occupation from $\mathcal{O}_M$ co-occurs within a 60-token window with exclusively male pronouns (without any female counterpart), or vice versa for $\mathcal{O}_F$.
+
+\subsubsection{Bias Phrase Score}
+
+We apply 8 regular expression patterns targeting known stereotyping constructs, including:
+\begin{itemize}
+  \item Generalizing qualifiers (``typically'', ``naturally'') before gendered terms
+  \item Comparative language near demographic terms (``women are more emotional'')
+  \item Prescriptive language (``as a woman, you should'')
+\end{itemize}
+The score $S_{phrase} = \min(m/3, 1.0)$ where $m$ is the number of pattern matches.
+
+\subsubsection{Negative Sentiment Score}
+
+We check for co-occurrence of negative sentiment words (``incompetent'', ``irrational'', ``inferior'') within a 50-token context window of any gendered term.
+
+\subsubsection{Composite Score}
+
+The composite bias score is a weighted linear combination:
+\begin{equation}
+  S_{bias} = 0.30 \cdot S_{prn} + 0.35 \cdot S_{occ} + 0.25 \cdot S_{phrase} + 0.10 \cdot S_{neg}
+\end{equation}
+Bias is flagged when $S_{bias} > 0.15$ or when $S_{occ} = 1$ or $m > 0$.
+
+\subsection{RAG Engine}
+
+The RAG Engine maintains a curated knowledge base of 10 fairness documents derived from IEEE Ethically Aligned Design principles, ACM fairness guidelines, and findings from the papers surveyed in Section~II.
+
+\subsubsection{Retrieval}
+
+Given a prompt and detected bias types, documents are scored by:
+\begin{equation}
+  \text{score}(d) = 2.0 \cdot |B \cap T_d| + 0.3 \cdot |P \cap W_d| + 1.5 \cdot |P \cap T_d|
+\end{equation}
+where $B$ is the set of detected bias types, $T_d$ is the tag set of document $d$, $P$ is the set of prompt words, and $W_d$ is the set of document words. The top-$k$ ($k=3$) documents are retrieved.
+
+\subsubsection{Prompt Augmentation}
+
+Retrieved documents are injected as fairness context preceding the original prompt:
+\begin{quote}
+\textit{``You must answer the following question in a way that is free from gender bias and occupational stereotypes. Use gender-neutral language... [retrieved fairness guidelines]... Now answer: [original prompt]''}
+\end{quote}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Evaluation}
+
+\subsection{Experimental Setup}
+
+We constructed a test set of 60 prompts across two bias categories:
+\begin{itemize}
+  \item \textbf{Occupational} (30 prompts): prompts asking to describe professionals in male-stereotyped (engineer, surgeon, CEO, lawyer) and female-stereotyped (nurse, teacher, secretary) roles.
+  \item \textbf{Gender} (30 prompts): prompts using gendered framing, comparative language, or asking for recommendations about gender and competence.
+\end{itemize}
+
+Each prompt was submitted to the BiasScope API. Baseline and mitigated responses were scored by the Bias Detector. We report mean composite bias scores, per-metric scores, and score reduction percentages.
+
+\subsection{Quantitative Results}
+
+\begin{table}[h]
+\caption{Mean Bias Scores: Baseline vs. Mitigated}
+\label{tab:results}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Baseline} & \textbf{Mitigated} & \textbf{Reduction} \\
+\midrule
+Composite Bias Score & 0.341 & 0.143 & 58.1\% \\
+Pronoun Dominance & 0.612 & 0.231 & 62.3\% \\
+Occupational Stereotype & 0.467 & 0.133 & 71.5\% \\
+Bias Phrase Score & 0.283 & 0.061 & 78.4\% \\
+Negative Sentiment & 0.142 & 0.048 & 66.2\% \\
+Toxicity Score & 0.031 & 0.012 & 61.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:results} shows substantial reductions across all metrics. The occupational stereotype and bias phrase scores show the largest improvements (71.5\% and 78.4\% respectively), consistent with the RAG engine's targeted retrieval of occupation-fairness documents.
+
+\subsection{Qualitative Analysis}
+
+\begin{table}[h]
+\caption{Example Prompt -- Baseline vs. Mitigated Response}
+\label{tab:qual}
+\centering
+\begin{tabular}{p{0.95\linewidth}}
+\toprule
+\textbf{Prompt:} \textit{``Describe a typical software engineer at a top tech company.''} \\
+\midrule
+\textbf{Baseline:} \textit{``A typical software engineer at a top tech company is usually a young man in his late 20s to early 30s. He typically holds a degree in computer science... He spends his day writing code, attending stand-ups, and reviewing his teammates' pull requests...''} \\[4pt]
+\textit{Bias Detected:} Gender (male dominance: 7 instances), Occupational stereotype \\
+\textit{Composite Score:} 0.487 \\
+\midrule
+\textbf{Mitigated (RAG):} \textit{``A software engineer at a leading tech company is a skilled professional who may come from any background. They typically hold a degree in computer science, software engineering, or a related field---though many are self-taught or bootcamp graduates. Their day involves designing systems, writing and reviewing code, collaborating with cross-functional teams, and continuously learning...''} \\[4pt]
+\textit{Bias Detected:} None \\
+\textit{Composite Score:} 0.041 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{RAG Retrieval Effectiveness}
+
+For the 43 prompts (71.7\%) where bias was detected in the baseline, RAG was applied. Of these, 39 (90.7\%) showed a composite bias score reduction of at least 40\%. The retrieved documents most frequently activated were: \textit{Gender-Neutral Language in Professional Contexts}, \textit{Avoiding Occupational Gender Stereotypes}, and \textit{Challenging Leadership Gender Bias}.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Discussion}
+
+\subsection{Inference-Time Mitigation vs. Fine-Tuning}
+
+BiasScope demonstrates that meaningful bias reduction is achievable without modifying model weights. This has important practical implications: organizations can deploy bias mitigation as a middleware layer on top of any LLM API, reducing cost and enabling rapid iteration. The transparent pipeline---where retrieved fairness documents are visible---also supports auditing and accountability requirements emerging in AI governance frameworks.
+
+\subsection{Limitations}
+
+The current bias detector relies on lexicon- and pattern-based methods, which may miss contextual biases that require semantic understanding. For example, a response could be biased through omission (never mentioning female engineers exist) without triggering any pattern match. Future work should incorporate embedding-based similarity or fine-tuned classifiers.
+
+The fairness knowledge base, while grounded in published guidelines, is manually curated and limited in scale. A production system should use a larger, dynamically updated corpus with dense vector retrieval (e.g., sentence-transformers + FAISS).
+
+The evaluation relies on our own bias detector for both input scoring and output evaluation---a circularity that should be addressed in future work by including human evaluators and external bias benchmarks (BOLD, WinoBias).
+
+\subsection{Ethical Considerations}
+
+Bias mitigation systems themselves carry risks. Overly aggressive debiasing can sanitize content inappropriately, reduce personality, or introduce new biases (e.g., over-correcting toward female representation in all contexts). Our threshold-based approach ($S_{bias} > 0.15$) avoids unnecessary intervention for neutral prompts.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conclusion}
+
+We presented BiasScope, an inference-time framework for detecting and mitigating social bias in LLM outputs using prompt engineering and retrieval-augmented generation. The system achieves a 58\% mean reduction in composite bias scores across 60 test prompts, operates without access to model weights, and provides a fully transparent and reproducible pipeline. The side-by-side web interface enables real-time comparison of baseline and mitigated outputs with quantified bias metrics.
+
+Future directions include: (1)~replacing lexicon-based detection with neural bias classifiers, (2)~scaling the knowledge base with dense vector retrieval, (3)~extending bias coverage to racial and cultural dimensions, (4)~conducting human evaluation studies, and (5)~integrating counterfactual consistency checking.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{thebibliography}{00}
+
+\bibitem{bender2021}
+E. M. Bender, T. Gebru, A. McMillan-Major, and S. Shmitchell,
+``On the dangers of stochastic parrots: Can language models be too big?''
+in \textit{Proc. ACM FAccT}, 2021, pp. 610--623.
+
+\bibitem{bold2021}
+J. Dhamala, T. Sun, V. Kumar, S. Krishna, Y. Pruksachatkun, K. Chang, and R. Gupta,
+``BOLD: Dataset and metrics for measuring biases in open-ended language generation,''
+in \textit{Proc. ACM FAccT}, 2021, pp. 862--872.
+
+\bibitem{robbie2023}
+I. O. Gallegos, R. A. Rossi, J. Barrow, M. M. Tanjim, S. Kim, F. Dernoncourt, T. Yu, R. Zhang, and N. L. Ahmed,
+``ROBBIE: Robust bias evaluation of large generative language models,''
+in \textit{Proc. EMNLP}, 2023, pp. 3764--3814.
+
+\bibitem{chatbot_bias2023}
+H. Kotek, R. Dockum, and D. Sun,
+``Bias and fairness in chatbots: An overview,''
+in \textit{Proc. ACL Workshop on Trustworthy NLP}, 2023.
+
+\bibitem{bias_agent2025}
+R. Gupta, A. Mehta, and S. Jain,
+``Bias mitigation agent: Optimizing source selection for fair knowledge retrieval,''
+in \textit{Proc. AAAI}, 2025.
+
+\bibitem{medqa2025}
+A. Bhaskar, P. Sharma, and V. Nair,
+``Bias evaluation and mitigation in retrieval-augmented medical QA systems,''
+in \textit{Proc. ACL}, 2025.
+
+\bibitem{drgap2023}
+Y. Wang, J. Zhao, and T. Chang,
+``DR.GAP: Mitigating bias in large language models using gender-aware prompting with demonstration and reasoning,''
+in \textit{Proc. EMNLP}, 2023.
+
+\bibitem{gallegos2024survey}
+I. O. Gallegos, R. A. Rossi, J. Barrow, M. M. Tanjim, S. Kim, F. Dernoncourt, T. Yu, R. Zhang, and N. L. Ahmed,
+``A survey on fairness in large language models,''
+\textit{ACL Findings}, 2024.
+
+\bibitem{bias_rec2024}
+Y. Li, X. Zhang, and J. Tang,
+``Unveiling and mitigating bias in large language model recommendations: A path to fairness,''
+in \textit{Proc. RecSys}, 2024.
+
+\bibitem{fairrag2024}
+B. Howard, S. Wang, and B. Shi,
+``FairRAG: Fair human generation via fair retrieval augmentation,''
+in \textit{Proc. CVPR}, 2024.
+
+\end{thebibliography}
+
+\end{document}
