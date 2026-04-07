@@ -1,10 +1,12 @@
 """
 Bias Detector Module
 Detects occupational and gender bias in LLM outputs using:
-- Gendered pronoun analysis
-- Occupational stereotype lexicons
-- Sentiment polarity per demographic term
-- Bias sensitivity scoring
+- 1.Gender Pronoun Dominance Score
+- 2. Occupational Stereotype Score
+- 3. Bias Phrase Score
+- 4. Negative Sentiment Score
+- 5. Composite Bias Score
+- 6. Toxicity Score
 
 Authors: Nidhi K
 """
