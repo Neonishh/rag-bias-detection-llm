@@ -61,7 +61,7 @@ Baseline LLM Response  ──→  Bias Detector (NLP scoring)
 
 ### Prerequisites
 - Python 3.9+
-- Ollama installed locally
+- A Google AI Studio API key (Gemini)
 
 ### Backend
 
@@ -70,9 +70,7 @@ cd backend
 pip install -r requirements.txt
 copy .env.example .env
 # On macOS/Linux use: cp .env.example .env
-# Optional: edit .env to change OLLAMA_MODEL (default: llama3.1:8b)
-ollama pull llama3.1:8b
-ollama serve
+# Edit .env and set GEMINI_API_KEY
 python app.py
 ```
 
@@ -99,7 +97,7 @@ bias-detector/
 │   ├── app.py           # Flask API server
 │   ├── bias_detector.py # NLP-based bias analysis engine
 │   ├── rag_engine.py    # Fairness KB + RAG retrieval
-│   ├── llm_client.py    # Ollama API wrapper
+│   ├── llm_client.py    # Gemini API wrapper
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/

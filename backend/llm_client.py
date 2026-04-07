@@ -1,5 +1,5 @@
 """
-LLM Client - wraps local Ollama API calls
+LLM Client - wraps Google Gemini API calls
 Authors: Navya G N
 """
 
@@ -9,9 +9,17 @@ import requests
 
 class LLMClient:
     def __init__(self):
-        self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-        self.model = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
-        self.timeout = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
+        self.base_url = os.environ.get(
+            "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
+        ).rstrip("/")
+        self.model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        self.api_key = os.environ.get("GEMINI_API_KEY")
+        self.timeout = int(os.environ.get("GEMINI_TIMEOUT", "60"))
+
+        if not self.api_key:
+            raise RuntimeError(
+                "Missing GEMINI_API_KEY. Add it to your .env file before starting the backend."
+            )
 
     def generate(self, prompt: str, system_prompt: str = None) -> str:
         """
@@ -24,29 +32,49 @@ class LLMClient:
             )
 
         payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
+            "system_instruction": {
+                "parts": [{"text": system_prompt}],
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": 512,
+            },
         }
 
         try:
             response = requests.post(
-                f"{self.base_url}/api/generate",
+                f"{self.base_url}/models/{self.model}:generateContent",
+                params={"key": self.api_key},
                 json=payload,
                 timeout=self.timeout,
             )
             response.raise_for_status()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            body = exc.response.text if exc.response is not None else ""
+            raise RuntimeError(
+                f"Gemini API error (HTTP {status}). Response: {body}"
+            ) from exc
         except requests.RequestException as exc:
             raise RuntimeError(
-                "Unable to reach Ollama. Make sure Ollama is installed, the server is running, "
-                "and OLLAMA_BASE_URL is correct."
+                "Unable to call Gemini API. Verify GEMINI_API_KEY, network access, and model name."
             ) from exc
 
         data = response.json()
-        text = data.get("response", "").strip()
+
+        candidates = data.get("candidates", [])
+        parts = []
+        if candidates:
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+        text = "".join(part.get("text", "") for part in parts).strip()
 
         if not text:
-            raise RuntimeError("Ollama returned an empty response.")
+            raise RuntimeError("Gemini returned an empty response.")
 
         return text
