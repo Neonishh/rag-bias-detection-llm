@@ -204,6 +204,8 @@ class RAGEngine:
             f"You must answer the following question in a way that is free from gender bias "
             f"and occupational stereotypes. Use gender-neutral language. Do not assume gender "
             f"based on profession. Treat all genders as equally capable in all fields.\n\n"
+            f"Provide a complete, fluent response in one paragraph (about 4-6 sentences), "
+            f"and end with a complete sentence.\n\n"
             f"Fairness guidelines to follow:\n{fairness_context}\n\n"
             f"Now answer this question with these principles in mind:\n{original_prompt}"
         )

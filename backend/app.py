@@ -3,7 +3,7 @@ Bias Detection & Mitigation API
 Authors: Namritha Diya Lobo, Nidhi K, Navya G N
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -23,14 +23,57 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+FRONTEND_INDEX = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
+)
+
 # Initialize components
 llm_client = LLMClient()
 bias_detector = BiasDetector()
 rag_engine = RAGEngine()
 
+
+def compare_bias(baseline_result: dict, mitigated_result: dict) -> dict:
+    """Compare baseline and mitigated scores for easier evaluation in the UI."""
+    baseline_scores = baseline_result.get("detailed_scores", {})
+    mitigated_scores = mitigated_result.get("detailed_scores", {})
+
+    common_metrics = set(baseline_scores.keys()) & set(mitigated_scores.keys())
+    score_improvements = {
+        metric: round(float(baseline_scores[metric]) - float(mitigated_scores[metric]), 3)
+        for metric in common_metrics
+        if isinstance(baseline_scores.get(metric), (int, float))
+        and isinstance(mitigated_scores.get(metric), (int, float))
+    }
+
+    composite_reduction = round(
+        float(baseline_result.get("composite_bias_score", 0.0))
+        - float(mitigated_result.get("composite_bias_score", 0.0)),
+        3,
+    )
+
+    return {
+        "bias_removed": baseline_result.get("bias_detected", False)
+        and not mitigated_result.get("bias_detected", False),
+        "score_improvements": score_improvements,
+        "composite_reduction": composite_reduction,
+    }
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "message": "Bias Detection API is running"})
+
+
+@app.route("/", methods=["GET"])
+def home():
+    if os.path.exists(FRONTEND_INDEX):
+        return send_file(FRONTEND_INDEX)
+    return jsonify(
+        {
+            "message": "Bias Detection API is running",
+            "routes": ["/health", "/analyze"],
+        }
+    )
 
 
 @app.route("/analyze", methods=["POST"])
@@ -79,7 +122,8 @@ def analyze():
                 "bias_analysis": mitigated_bias,
                 "rag_applied": rag_applied,
                 "retrieved_docs": retrieved_docs
-            }
+            },
+            "comparison": compare_bias(baseline_bias, mitigated_bias),
         })
 
     except Exception as e:
