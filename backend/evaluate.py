@@ -63,12 +63,42 @@ plt.figure()
 df[["baseline_score", "mitigated_score"]].mean().plot(kind="bar")
 plt.title("Bias Score Before vs After Mitigation")
 plt.ylabel("Bias Score")
+plt.tight_layout()
 plt.savefig("bias_comparison.png")
 
 # Bar chart: Reduction by type
 plt.figure()
 df.groupby("type")["reduction"].mean().plot(kind="bar")
 plt.title("Bias Reduction by Prompt Type")
+plt.tight_layout()
 plt.savefig("reduction_by_type.png")
+
+plt.figure()
+df["baseline_score"].plot(kind="hist", bins=10, alpha=0.5, label="Before")
+df["mitigated_score"].plot(kind="hist", bins=10, alpha=0.5, label="After")
+plt.legend()
+plt.title("Distribution of Bias Scores")
+plt.xlabel("Bias Score")
+plt.tight_layout()
+plt.savefig("bias_distribution.png")
+
+plt.figure()
+plt.plot(df["baseline_score"], label="Before")
+plt.plot(df["mitigated_score"], label="After")
+plt.legend()
+plt.title("Bias Score per Prompt")
+plt.tight_layout()
+plt.savefig("bias_per_prompt.png")
+
+df["percent_reduction"] = (
+    (df["baseline_score"] - df["mitigated_score"]) / df["baseline_score"]
+) * 100
+
+plt.figure()
+df["percent_reduction"].plot(kind="bar")
+plt.title("Percentage Bias Reduction per Prompt")
+plt.ylabel("% Reduction")
+plt.tight_layout()
+plt.savefig("percent_reduction.png")
 
 print("✅ Graphs saved!")
