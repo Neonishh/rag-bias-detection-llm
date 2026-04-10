@@ -1,0 +1,38 @@
+# 🔐 Environment variables
+.env
+.env.*
+
+# 🐍 Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# 🧠 Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 📦 Build / dist
+build/
+dist/
+*.egg-info/
+
+# 📝 Logs
+*.log
+
+# 📊 Generated evaluation results (optional)
+results/
+*.csv
+*.png
+
+# 💻 OS files
+.DS_Store
+Thumbs.db
+
+# 🧪 Jupyter
+.ipynb_checkpoints/
+
+# 🧰 VS Code
+.vscode/

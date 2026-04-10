@@ -1,0 +1,442 @@
+# ============================================================================
+# FAIRNESS KNOWLEDGE BASE
+# Bias Mitigation for LLM Outputs — RAG Reference Document
+#
+# Sources:
+#   [IEEE]  IEEE Ethically Aligned Design, v2 (2019)
+#           https://ethicsstandards.org/ethically-aligned-design/
+#   [ACM]   ACM FAccT Principles & SIGAI AI Ethics Resources (2022)
+#           https://facctconference.org
+#   [NIST]  NIST AI Risk Management Framework 1.0 (2023)
+#           https://airc.nist.gov/RMF
+#   [EU]    EU AI Act — High-Risk AI System Requirements (2024)
+#           https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689
+#   [WEF]   WEF Global Gender Gap Report (2024)
+#           https://www.weforum.org/reports/global-gender-gap-report-2024
+#   [BOL]   Blodgett et al. (2020) "Language (Technology) is Power" ACL 2020
+#   [KOT]   Kotek et al. (2023) "Gender Bias and Stereotypes in LLM" — ACM CHI 2023
+#   [WAN]   Wan et al. (2023) "Kelly is a Warm Person, Joseph is a Role Model" EMNLP 2023
+#   [NAV]   Navigli et al. (2023) "Biases in Large Language Models" ACM Comput. Surv.
+#   [BOL16] Bolukbasi et al. (2016) "Man is to Computer Programmer as Woman is to Homemaker"
+#   [ZHA]   Zhao et al. (2018) WinoBias — NAACL 2018
+#   [GAG]   Gaglione et al. (2024) "FairRAG: Fair Human Generation via Fair Face Retrieval" CVPR 2024
+#
+# Format: Each entry begins with ---ENTRY--- and has structured fields.
+# ============================================================================
+
+---ENTRY---
+id: gender_neutral_language_core
+title: Gender-Neutral Language in Professional Contexts
+tags: gender, pronouns, occupational, language, writing
+sources: IEEE-EAD-v2 §4.2, ACM-FAccT-2022, NIST-RMF-1.0 §2.5
+content:
+Use gender-neutral pronouns and role titles when discussing professionals whose
+gender is not specified or not relevant. The singular "they/them" is grammatically
+established and widely endorsed by major style guides (AP, Chicago, APA 7th ed.)
+for gender-unspecified referents. Prefer "they" over invented pronouns unless
+explicitly requested otherwise. Avoid defaulting to "he" for leadership, STEM,
+or high-status occupations, and "she" for caregiving, administrative, or
+educational occupations — this default is a documented source of occupational
+gender bias in both human writing and LLM outputs (Kotek et al. 2023). Use
+job titles directly: "the engineer", "the surgeon", "the nurse" — rather than
+"he, the engineer" or "she, the nurse". When multiple hypothetical professionals
+are described, vary pronouns equitably across genders or use neutral forms
+consistently throughout the response.
+mitigation_strategies:
+  - Replace "he/she" splits with "they" for unspecified individuals
+  - Lead with the job title, not the pronoun
+  - When using examples, alternate gendered pronouns across examples
+  - Flag responses that use gendered pronouns for role-only references
+
+---ENTRY---
+id: occupational_stereotype_avoidance
+title: Avoiding Occupational Gender Stereotypes in LLM Outputs
+tags: occupational, gender, stereotype, profession, llm
+sources: Kotek-2023, WinoBias-Zhao-2018, Bolukbasi-2016, NIST-RMF-1.0 §2.6
+content:
+Occupational stereotyping in language models is well-documented: LLMs assign
+male pronouns to engineers, surgeons, CEOs, and lawyers at rates significantly
+exceeding their actual gender representation, and female pronouns to nurses,
+teachers, secretaries, and caregivers at similarly inflated rates (Kotek et al.
+2023 — GPT-4 assigned male pronouns to "engineer" 87% of the time). These
+defaults reflect and amplify biases present in pre-training corpora. Do not
+assume gender based on profession. Engineering, medicine, law, and executive
+leadership have significant and growing representation from all genders. Nursing,
+teaching, and caregiving are practiced by all genders and require no gender
+framing. When describing job roles, focus on skills, qualifications, and
+responsibilities rather than gendered assumptions. A response about "a nurse who
+manages their ward" is equally accurate and less biased than "a nurse who manages
+her ward."
+mitigation_strategies:
+  - Test responses with counterfactual gender substitution (if meaning changes, revise)
+  - Use role-based framing: "the surgeon performed..." not "he performed..."
+  - When profession appears with pronouns, ensure gender is stated or neutral
+  - Flag high-risk occupation + single-gender pronoun co-occurrences
+
+---ENTRY---
+id: agentic_communal_trait_asymmetry
+title: Agentic vs. Communal Trait Attribution Asymmetry
+tags: gender, traits, agentic, communal, stereotype, llm, personality
+sources: Wan-2023, Eagly-Karau-2002, Navigli-2023
+content:
+A well-documented form of LLM gender bias is asymmetric attribution of
+personality traits: agentic traits (decisive, ambitious, rational, analytical,
+assertive, confident, strategic, independent, visionary, competitive) are
+disproportionately attributed to male-coded subjects, while communal traits
+(nurturing, empathetic, caring, warm, supportive, gentle, cooperative,
+emotional, sensitive, compassionate) are disproportionately attributed to
+female-coded subjects (Wan et al. 2023 — across 10 LLMs, male names received
+more "role model" framings; female names received more "warm person" framings).
+This asymmetry is harmful because: (1) agentic traits are more associated with
+professional competence and leadership; (2) communal traits, while positive,
+carry implicit expectations of deference and service. A fair response attributes
+a full range of traits to individuals regardless of gender. Leaders can be warm
+and decisive. Caregivers can be analytical and strategic.
+mitigation_strategies:
+  - Audit trait-gender co-occurrence in generated text
+  - If describing a professional, include both agentic and communal traits regardless of gender
+  - Avoid sentences that pattern-match: "[woman's name] is warm/caring/supportive"
+  - Avoid sentences that pattern-match: "[man's name] is ambitious/analytical/decisive"
+
+---ENTRY---
+id: counterfactual_fairness_test
+title: Counterfactual Fairness in Language Generation
+tags: gender, fairness, evaluation, counterfactual, testing, methodology
+sources: Kusner-2017-Counterfactual-Fairness, Kotek-2023, ACM-FAccT-2022
+content:
+A response achieves counterfactual fairness when substituting gendered terms
+produces a substantively equivalent output. The test: replace all gendered
+pronouns and gender-specific nouns with their counterparts (he↔she, him↔her,
+man↔woman, etc.) and evaluate whether the response changes in ways that cannot
+be explained by the substitution alone. If a response describes "a male CEO as
+visionary and decisive" but would describe "a female CEO as warm and
+collaborative" for the same prompt, it fails counterfactual fairness. This test
+is the gold standard for detecting subtle stereotype expression that escapes
+keyword-level detection (Kotek et al. 2023). Apply counterfactual testing to
+any response involving professional roles, personality descriptions, or
+capability assessments. Counterfactual fairness does not require ignoring gender
+entirely — it requires that gender not be the explanatory variable for trait
+differences.
+mitigation_strategies:
+  - Systematically substitute gendered terms and compare outputs
+  - Flag differences in trait attribution, capability framing, or role descriptions
+  - Require equivalence in: adjective sets, sentence structure, opportunities described
+
+---ENTRY---
+id: inclusive_job_descriptions
+title: Writing Inclusive and Unbiased Job Descriptions
+tags: occupational, gender, language, inclusive, hiring, recruitment
+sources: IEEE-EAD-v2 §5.1, EU-AI-Act-2024 Art.10, WEF-2024
+content:
+Effective and fair job descriptions focus on required skills and competencies,
+not gender-coded language. Research consistently shows that certain vocabulary
+signals gender preference to applicants even when unintended. Words with male
+associations that reduce female applications include: "aggressive", "dominant",
+"competitive", "manpower", "ninja", "rockstar", "crushing it", "charge".
+Words with female associations that reduce male applications include: "nurturing",
+"supportive", "collaborative spirit", "people-oriented", "interpersonal".
+Use competency-based, gender-neutral language: "analytical", "results-driven",
+"effective communicator", "collaborative", "problem-solver", "detail-oriented".
+The EU AI Act (2024) classifies AI-assisted hiring tools as high-risk systems
+requiring bias auditing — this extends to job description generation by LLMs.
+Inclusive language expands the qualified candidate pool and is required under
+equal employment opportunity frameworks in most jurisdictions.
+mitigation_strategies:
+  - Replace agentic-coded or communal-coded adjectives with skill descriptions
+  - Remove gendered role titles (use "chairperson" not "chairman")
+  - Use "they" in example applicant scenarios
+  - Audit for gender-coded vocabulary before output
+
+---ENTRY---
+id: gender_parity_stem
+title: Gender Parity in STEM — Language and Representation
+tags: gender, occupational, stem, engineering, science, representation
+sources: WEF-2024, UNESCO-STEM-2023, Kotek-2023, IEEE-EAD-v2
+content:
+Gender parity in STEM is an active global priority. According to the WEF Global
+Gender Gap Report 2024, women represent approximately 28% of STEM workers
+globally, with significant regional variation and strong upward trends in
+engineering and computer science enrollment. UNESCO reports that women earn
+35% of STEM degrees globally. These numbers are rising. When LLMs default
+to male pronouns for STEM roles, they reinforce a demographic picture that
+is already outdated and worsening. Implicit bias in language and AI-generated
+hiring processes has been empirically linked to reduced female representation
+in technical roles (IEEE Ethically Aligned Design, v2). When discussing STEM
+professionals, use inclusive language. Acknowledge contributions of researchers
+and engineers of all genders. Do not frame technical aptitude as gendered.
+Phrases like "even women can become engineers" or "as a woman in STEM, she
+faces challenges" are othering framing — treat all genders as default members
+of all technical fields.
+mitigation_strategies:
+  - Use "they" by default for hypothetical STEM professionals
+  - Do not add gender qualifiers to STEM competencies ("female engineer" vs "engineer")
+  - When referencing representation gaps, frame as systemic issues, not innate differences
+
+---ENTRY---
+id: leadership_bias_executive
+title: Challenging Leadership Gender Bias in Executive Contexts
+tags: gender, occupational, leadership, management, executive, ceo
+sources: Wan-2023, McKinsey-Women-in-Workplace-2023, IEEE-EAD-v2, ACM-FAccT-2022
+content:
+Leadership qualities — decisiveness, vision, strategic thinking, accountability,
+confidence — are not gender-specific. McKinsey's Women in the Workplace 2023
+report documents that diverse leadership teams consistently outperform
+homogeneous ones on innovation and financial performance. Yet LLMs
+disproportionately describe male executives with agentic, competence-based
+language ("visionary", "decisive", "strategic") and female executives with
+warmth-based language ("collaborative", "empathetic", "team-oriented") —
+even when describing the same role (Wan et al. 2023). This asymmetry is a
+documented form of benevolent sexism: framing women's leadership through a
+relational, supportive lens rather than a competence lens. When describing
+CEOs, managers, directors, and executives, use gender-neutral language. Do
+not describe leadership styles as "masculine" or "feminine". Apply the same
+vocabulary of competence to leaders of all genders. Note that warmth and
+competence are both valid and important leadership traits — the problem is
+their asymmetric gender assignment.
+mitigation_strategies:
+  - Describe executives with equivalent vocabulary regardless of stated gender
+  - Avoid "despite being a woman, she..." constructions
+  - Do not frame female leadership as exceptional or surprising
+
+---ENTRY---
+id: caregiver_stereotype_challenge
+title: Challenging Caregiver and Domestic Role Stereotypes
+tags: gender, caregiver, stereotype, nurse, teacher, domestic, social-work
+sources: Navigli-2023, WinoBias-Zhao-2018, IEEE-EAD-v2
+content:
+Caregiving, teaching, and domestic work are skills and professional roles —
+not gendered traits. Men are effective nurses, teachers, social workers, and
+primary caregivers. Women are effective surgeons, engineers, and executives.
+Language that implies caregiving is inherently feminine perpetuates what
+sociologists call "role congruity theory" — the expectation that women should
+occupy communal roles and men agentic roles (Eagly & Karau, 2002). This
+expectation, when encoded in LLM outputs, has downstream effects: research
+shows it reduces the perceived legitimacy of men in caregiving roles and
+women in leadership roles simultaneously. Use role-based framing for all
+care professions: "nurses manage patient care plans" not "nurses, as natural
+caregivers, provide emotional support." Describe the skills, competencies,
+and professional responsibilities of caregiving roles with the same neutral,
+competence-based language used for technical roles.
+mitigation_strategies:
+  - Use neutral pronouns for nurses, teachers, social workers
+  - Describe care professions through skills and competencies, not temperament
+  - Avoid framing men in caregiving roles as unusual or exceptional
+
+---ENTRY---
+id: ieee_equity_principle
+title: IEEE Principle — Equity and Non-Discrimination in AI Outputs
+tags: fairness, gender, occupational, ethics, ieee, equity, non-discrimination
+sources: IEEE-EAD-v2 §4.1-4.4, IEEE-Std-7000-2021
+content:
+IEEE Ethically Aligned Design (v2, 2019) establishes that AI systems must
+avoid generating outputs that discriminate based on gender, race, ethnicity,
+sexual orientation, disability, or other protected characteristics. IEEE
+Standard 7000-2021 (Model Process for Addressing Ethical Concerns) requires
+AI systems to: (1) identify and assess potential bias in training data;
+(2) implement mechanisms to detect discriminatory outputs; (3) provide
+transparency about known limitations. Outputs should reflect equitable
+representation and avoid reinforcing historical inequalities embedded in
+training data. IEEE distinguishes between "equal treatment" (same response
+regardless of group) and "equitable treatment" (responses that account for
+and correct for systemic disadvantage). For language models, this means
+actively counteracting the statistical biases absorbed from training corpora
+rather than merely not introducing new ones.
+mitigation_strategies:
+  - Audit outputs for differential treatment across gender groups
+  - Apply counterfactual testing as a fairness check
+  - Document and disclose known bias limitations in LLM outputs
+
+---ENTRY---
+id: acm_fairness_principles
+title: ACM FAccT Principles — Fairness, Accountability, Transparency
+tags: fairness, accountability, transparency, acm, ethics, methodology
+sources: ACM-FAccT-2022, ACM-Code-of-Ethics-2018, Blodgett-2020
+content:
+The ACM FAccT (Fairness, Accountability, and Transparency) conference
+principles, grounded in the ACM Code of Ethics (2018), require that AI
+systems: (1) avoid harm, including social harm from biased outputs; (2) be
+honest about limitations; (3) respect privacy and autonomy. Blodgett et al.
+(2020, "Language (Technology) is Power") argue that NLP bias research must
+be grounded in specific, documented social harms — not merely statistical
+disparity. For LLM output bias, this means: identifying the mechanism of
+harm (stereotype reinforcement, opportunity limitation, dignity harm), the
+affected group, and the downstream consequence. ACM principles require
+that bias mitigation efforts be evaluated empirically — not claimed through
+architectural choice alone. A RAG-based debiasing system must demonstrate
+measured reduction in harmful outputs through systematic evaluation, not
+through the presence of fairness guidelines in a knowledge base.
+mitigation_strategies:
+  - Document the specific harm mechanism for each detected bias type
+  - Evaluate mitigation empirically with pre/post bias scores
+  - Apply the "sociotechnical" lens: consider who is harmed and how
+
+---ENTRY---
+id: nist_rmf_bias_governance
+title: NIST AI Risk Management Framework — Bias Governance
+tags: fairness, governance, nist, risk, evaluation, methodology, llm
+sources: NIST-RMF-1.0-2023, NIST-SP-1270-2022 (Towards Standards for AI Bias)
+content:
+The NIST AI Risk Management Framework 1.0 (2023) classifies AI bias as a
+risk category requiring structured governance. NIST SP 1270 ("Towards a
+Standard for Identifying and Managing Bias in Artificial Intelligence")
+defines three bias types relevant to LLM outputs: (1) statistical bias —
+systematic differences in outputs across demographic groups; (2) cognitive
+bias — patterns inherited from human-generated training data; (3) systemic
+bias — structural inequalities encoded in data collection and labeling.
+NIST recommends: bias impact assessments before deployment, ongoing
+monitoring in production, documentation of known failure modes, and
+red-teaming specifically targeting demographic fairness. For LLM text
+generation, NIST recommends evaluating outputs across: attribute swapping
+(counterfactual), demographic parity of positive/negative framings, and
+representation parity of professional roles across gender, race, and age.
+mitigation_strategies:
+  - Classify detected bias by NIST taxonomy (statistical, cognitive, systemic)
+  - Conduct pre-deployment bias assessment across demographic groups
+  - Monitor and log bias scores for ongoing governance
+
+---ENTRY---
+id: intersectional_fairness
+title: Intersectional Fairness — Gender × Race × Class
+tags: gender, occupational, fairness, intersectional, race, class, compounding
+sources: Crenshaw-1989, ACM-FAccT-2022, Navigli-2023, Blodgett-2020
+content:
+Bias in language does not operate along a single dimension. Kimberlé Crenshaw's
+intersectionality framework (1989) demonstrates that gender, race, class, and
+other dimensions of identity interact to produce compounding disadvantage.
+LLM bias research confirms this: Navigli et al. (2023) document that LLMs
+exhibit stronger stereotyping for intersectional groups (e.g., Black women
+in STEM, Latina executives, Asian men in caregiving) than for either dimension
+alone. A fair LLM response considers that professional capability is not
+predicted by any combination of demographic characteristics. Avoid
+generalizations about which groups "naturally" excel at certain roles. When
+describing professionals, use the same descriptive vocabulary regardless of
+the intersection of their demographic characteristics. Be especially cautious
+with "positive" stereotypes (e.g., "Asian students excel at math") which
+remain harmful stereotypes regardless of valence.
+mitigation_strategies:
+  - Do not assume capabilities based on demographic combinations
+  - Apply the same language quality to descriptions of all demographic groups
+  - Flag "positive" stereotypes — they still reduce individuals to group membership
+
+---ENTRY---
+id: llm_specific_bias_mechanisms
+title: LLM-Specific Bias Mechanisms and Generation Patterns
+tags: llm, bias, mechanism, generation, sycophancy, amplification
+sources: Kotek-2023, Wan-2023, Navigli-2023, Bender-2021
+content:
+LLMs exhibit bias through mechanisms distinct from traditional NLP systems.
+Key LLM-specific bias patterns documented in the literature: (1) Occupational
+default bias: Kotek et al. (2023) find GPT-4 uses male pronouns for
+stereotypically male occupations 87% of the time even in gender-neutral prompts.
+(2) Persona amplification: Wan et al. (2023) show that LLMs amplify gendered
+trait differences when given persona prompts ("You are a career counselor").
+(3) Sycophantic bias: LLMs adjust outputs to match perceived user expectations,
+which can reinforce user-held stereotypes. (4) Positional bias: the gender of
+a subject mentioned first in a prompt influences how subsequent subjects are
+described. (5) Instruction-following failure: explicit fairness instructions
+in system prompts reduce but do not eliminate stereotyped outputs (Kotek 2023).
+RAG-based mitigation must address all five mechanisms — not only keyword-level
+patterns.
+mitigation_strategies:
+  - Address first-mention positioning effects in prompt construction
+  - Include explicit counterfactual instructions in augmented prompts
+  - Do not rely solely on keyword prohibition — structural prompting is needed
+
+---ENTRY---
+id: pronoun_defaulting_avoidance
+title: Avoiding Default Pronoun Assumptions in Examples and Scenarios
+tags: gender, pronouns, occupational, language, examples, scenarios
+sources: Kotek-2023, WinoBias-Zhao-2018, AP-Style-Guide-2017
+content:
+Defaulting to "he" for doctors, engineers, scientists, and leaders, or "she"
+for nurses, teachers, and assistants is a well-documented and pervasive source
+of occupational bias in both human writing and LLM outputs. The WinoBias
+benchmark (Zhao et al. 2018) shows that coreference resolution models and
+language models make systematically gendered pronoun assumptions for 40
+occupations. The AP Stylebook (2017) formally endorses "they" as a singular
+pronoun for gender-unspecified individuals. Use "they" as a singular pronoun
+when gender is unspecified — this is grammatically correct and bias-mitigating.
+If multiple examples are given, vary pronouns equitably: if "the engineer" is
+"he" in one example, "the nurse" should not be "she" in the next. The
+combination of gendered pronoun + stereotyped occupation is the single highest-
+signal bias pattern in LLM outputs (Kotek 2023, WinoBias precision for 40
+occupations ranged from 0.65 to 0.92 for gender-stereotyped assignment).
+This applies to fictional scenarios, worked examples, case studies, and
+hypothetical professionals.
+mitigation_strategies:
+  - Default to "they" for all unspecified-gender professionals
+  - If using "he" or "she", balance across examples
+  - Never pair gendered pronoun with stereotyped occupation without stated reason
+
+---ENTRY---
+id: rag_fairness_evaluation
+title: Evaluating RAG-Based Fairness Interventions
+tags: fairness, evaluation, rag, methodology, metrics, research
+sources: FairRAG-Gaglione-2024, ACM-FAccT-2022, NIST-RMF-1.0
+content:
+RAG-based fairness interventions must be evaluated empirically. Gaglione et al.
+(2024, "FairRAG") demonstrate that retrieval-augmented generation can
+meaningfully reduce demographic bias in generative outputs, but only when:
+(1) the knowledge base is diverse and representative; (2) retrieval is
+semantically relevant to the specific bias type detected; (3) the augmented
+prompt is structured to provide actionable, specific guidance rather than
+general fairness statements. Evaluation metrics for RAG-based debiasing should
+include: (a) pre/post composite bias score reduction; (b) counterfactual
+consistency improvement; (c) semantic preservation — the mitigated response
+should answer the original question with equivalent information quality;
+(d) over-correction detection — responses should not become so hedged as to
+be uninformative. The NIST RMF recommends tracking bias scores over time in
+production to detect distributional shift. A debiasing system that reduces
+bias scores without degrading answer quality represents the target outcome.
+mitigation_strategies:
+  - Measure pre/post bias scores for every mitigation event
+  - Check semantic equivalence between baseline and mitigated responses
+  - Monitor for over-hedging as a form of quality degradation
+  - Use precision@k to evaluate retrieval quality separately from generation quality
+
+---ENTRY---
+id: age_bias_intersection
+title: Age and Gender Intersectional Bias in Professional Contexts
+tags: gender, age, intersectional, occupational, representation
+sources: Navigli-2023, ACM-FAccT-2022
+content:
+Age and gender interact to produce compound bias in LLM outputs. Research
+documents that LLMs describe young women in professional roles as inexperienced
+or requiring mentorship, while young men in the same roles are described as
+ambitious and promising. Older women in leadership are more frequently described
+in terms of appearance or family status; older men in equivalent roles are
+described in terms of experience and legacy. These patterns compound gender
+disadvantage with age stereotyping. Avoid age-inflected gender language:
+"a young female executive" framing draws attention to both youth and gender
+in ways that "a young executive" does not. When describing professionals,
+reference age only when directly relevant. Apply the same vocabulary of
+competence and achievement across age-gender combinations.
+mitigation_strategies:
+  - Avoid foregrounding both gender and age simultaneously
+  - Apply equivalent vocabulary across age-gender combinations
+  - Do not describe professional accomplishments differently based on age × gender
+
+---ENTRY---
+id: eu_ai_act_compliance
+title: EU AI Act — Non-Discrimination Requirements for High-Risk AI
+tags: fairness, governance, eu, legal, compliance, non-discrimination, llm
+sources: EU-AI-Act-2024 Art.10 Art.13 Art.72, GDPR-Art.22
+content:
+The EU AI Act (2024) establishes binding non-discrimination requirements for
+high-risk AI systems, which include AI systems used in hiring, education,
+credit, and certain generative applications. Article 10 requires that training
+data be examined for possible biases and that appropriate measures be taken.
+Article 13 requires transparency about system capabilities and limitations,
+including known bias characteristics. Article 72 establishes ongoing post-market
+monitoring obligations. For LLM-based systems, compliance requires: documented
+bias testing methodology, measurable bias reduction from baseline, and user
+disclosure when outputs may reflect societal biases. The GDPR Article 22
+prohibits automated decisions that produce legal or similarly significant
+effects based solely on automated processing without human oversight — this
+applies to LLM-generated assessments of individuals. Bias detection and
+mitigation systems like this project represent a step toward EU AI Act compliance
+for LLM deployments in regulated contexts.
+mitigation_strategies:
+  - Document bias testing methodology for regulatory transparency
+  - Provide users with disclosure about known LLM bias characteristics
+  - Implement human-in-the-loop for high-stakes individual assessments
