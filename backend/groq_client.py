@@ -5,6 +5,7 @@ class GroqClient:
     def __init__(self):
         self.api_key = os.environ.get("GROQ_API_KEY")
         self.model = os.environ.get("GROQ_MODEL", "mixtral-8x7b-32768")
+        self.timeout = int(os.environ.get("GROQ_TIMEOUT", "60"))
 
         if not self.api_key:
             raise RuntimeError("Missing GROQ_API_KEY")
@@ -29,7 +30,7 @@ class GroqClient:
             "temperature": 0.7,
         }
 
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
 
         if response.status_code != 200:
             raise RuntimeError(f"Groq error: {response.text}")
