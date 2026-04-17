@@ -44,7 +44,7 @@
 \maketitle
 
 \begin{abstract}
-Large Language Models (LLMs) can reproduce social stereotypes that appear in training data, especially around gender and occupations. Many mitigation methods rely on fine-tuning or complex post-processing, which can be expensive and hard to audit. We present \textbf{BiasScope}, a lightweight inference-time framework that combines prompt engineering and Retrieval-Augmented Generation (RAG) to detect and reduce bias without changing model weights. In our implementation, responses are generated through the Gemini 2.5 Flash API. The pipeline (1)~generates a baseline response, (2)~scores it using a transparent lexicon- and pattern-based detector, (3)~retrieves fairness guidance from a curated knowledge base when bias is detected, and (4)~generates a mitigated response using an augmented prompt. In the latest automated evaluation run (27 completed prompts), the mean composite bias score decreased from 0.205 to 0.026, corresponding to an 87.4\% relative reduction. BiasScope is simple to deploy, model-agnostic in design, and fully traceable from detection to mitigation.
+Large Language Models (LLMs) can reproduce social stereotypes that appear in training data, especially around gender and occupations. Many mitigation methods rely on fine-tuning or complex post-processing, which can be expensive and hard to audit. We present \textbf{BiasScope}, a lightweight inference-time framework that combines prompt engineering and Retrieval-Augmented Generation (RAG) to detect and reduce bias without changing model weights. In our implementation, responses are generated through API-based LLM backends with a single-provider-per-run policy. The pipeline (1)~generates a baseline response, (2)~scores it using a transparent lexicon- and pattern-based detector, (3)~retrieves fairness guidance from a curated knowledge base when bias is detected, and (4)~generates a mitigated response using an augmented prompt. In the latest automated evaluation run (26 completed prompts, Groq provider), the mean composite bias score decreased from 0.158 to 0.044, corresponding to a 72.1\% relative reduction. BiasScope is simple to deploy, model-agnostic in design, and fully traceable from detection to mitigation.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -189,15 +189,9 @@ The proposed system, \textbf{BiasScope}, is designed as a lightweight, inference
 
 Figure~\ref{fig:arch} illustrates the end-to-end system workflow.
 
-\begin{figure}[h]
+\begin{figure}[t]
 \centering
-\fbox{\parbox{0.95\linewidth}{
-\centering
-\textbf{[Architecture Diagram Placeholder]}\\
-\vspace{4pt}
-\small Replace with system architecture diagram showing:
-User → LLM → Bias Detection → Decision → RAG + Prompt Augmentation → LLM → Mitigated Output → Visualization
-}}
+\includegraphics[width=\linewidth]{images/architecture.png}
 \caption{End-to-end BiasScope architecture for bias detection and mitigation.}
 \label{fig:arch}
 \end{figure}
@@ -421,28 +415,28 @@ The prompt suite spans three categories:
   \item \textbf{Traits}: prompts explicitly framed with gendered role/personality descriptors.
 \end{itemize}
 
-From the current run, 27 prompts were successfully completed and included in analysis. For each prompt, we report baseline composite bias score, mitigated composite bias score, and absolute reduction.
+From the current run, 26 prompts were successfully completed and included in analysis. The run used a single locked provider (Groq) for consistency across prompts. For each prompt, we report baseline composite bias score, mitigated composite bias score, and absolute reduction.
 
 \subsection{Quantitative Results}
 
 \begin{table}[h]
-\caption{Overall Composite Bias Results (27 Prompts)}
+\caption{Overall Composite Bias Results (26 Prompts)}
 \label{tab:results}
 \centering
 \begin{tabular}{lccc}
 \toprule
 \textbf{Metric} & \textbf{Value} & \textbf{Mitigated/Derived} & \textbf{Outcome} \\
 \midrule
-Mean Composite Score & 0.205 & 0.026 & 87.4\% relative reduction \\
-Mean Absolute Reduction & -- & 0.179 & per prompt average drop \\
-Prompts with Baseline Bias ($>0$) & 17/27 & -- & 63.0\% triggered \\
-Triggered Prompts Improved & 15/17 & -- & 88.2\% improved \\
-Triggered Prompts with $\geq$40\% Drop & 14/17 & -- & 82.4\% strong improvement \\
+Mean Composite Score & 0.158 & 0.044 & 72.1\% relative reduction \\
+Mean Absolute Reduction & -- & 0.114 & per prompt average drop \\
+Prompts with Baseline Bias ($>0$) & 17/26 & -- & 65.4\% triggered \\
+Triggered Prompts Improved & 12/17 & -- & 70.6\% improved \\
+Triggered Prompts with $\geq$40\% Drop & 10/17 & -- & 58.8\% strong improvement \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:results} shows a clear overall reduction after mitigation. The mean composite score decreased from 0.205 to 0.026, indicating that the mitigation stage substantially lowered measured bias on the evaluated prompt set.
+Table~\ref{tab:results} shows a clear overall reduction after mitigation. The mean composite score decreased from 0.158 to 0.044, indicating that the mitigation stage substantially lowered measured bias on the evaluated prompt set.
 
 \begin{table}[h]
 \caption{Mean Absolute Reduction by Prompt Type}
@@ -452,14 +446,39 @@ Table~\ref{tab:results} shows a clear overall reduction after mitigation. The me
 \toprule
 \textbf{Prompt Type} & \textbf{Mean Reduction} \\
 \midrule
-Occupation & 0.0736 \\
-Comparison & 0.1015 \\
-Traits & 0.3664 \\
+Occupation & 0.0272 \\
+Comparison & 0.1163 \\
+Traits & 0.2190 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 As shown in Table~\ref{tab:type_reduction}, trait-focused prompts exhibit the largest average reduction. This is expected because those prompts contain explicit gendered framing, giving the mitigation pipeline more opportunities to rewrite biased phrasing.
+
+\subsection{Evaluation Graphs}
+
+Figures~\ref{fig:bias-comparison}, \ref{fig:bias-per-prompt}, and \ref{fig:bias-distribution} present the generated visual summaries from the current run.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{images/bias_comparison.png}
+\caption{Mean baseline vs. mitigated composite bias score.}
+\label{fig:bias-comparison}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{images/bias_per_prompt.png}
+\caption{Per-prompt baseline and mitigated bias scores.}
+\label{fig:bias-per-prompt}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{images/bias_distribution.png}
+\caption{Distribution shift of composite bias scores after mitigation.}
+\label{fig:bias-distribution}
+\end{figure}
 
 \subsection{Qualitative Analysis}
 
@@ -470,11 +489,11 @@ Qualitatively, the mitigation stage most consistently removes:
   \item occupation-to-gender coupling in trait descriptions.
 \end{itemize}
 
-In a high-bias trait prompt from the current run, composite score dropped from 0.71 to 0.00 after mitigation, demonstrating that strongly gendered baseline outputs can be rewritten into neutral alternatives while preserving task intent.
+In a high-bias trait prompt from the current run, composite score dropped from 0.583 to 0.010 after mitigation, demonstrating that strongly gendered baseline outputs can be rewritten into substantially more neutral alternatives while preserving task intent.
 
 \subsection{RAG Retrieval Effectiveness}
 
-RAG-based mitigation was activated for 17 prompts (all cases where baseline score was non-zero). Among triggered prompts, 15 showed positive improvement and 14 achieved at least 40\% relative score reduction. Two triggered prompts showed negligible or zero change, indicating cases where prompt augmentation alone was insufficient for the selected model response.
+RAG-based mitigation was activated for 17 prompts (all cases where baseline score was non-zero). Among triggered prompts, 12 showed positive improvement and 10 achieved at least 40\% relative score reduction. Five triggered prompts showed negligible or zero change, indicating cases where prompt augmentation alone was insufficient for the selected model response.
 
 Overall, the new run confirms that retrieval-guided mitigation improves most biased generations, with strongest impact on explicitly gendered trait prompts.
 
@@ -500,7 +519,7 @@ Bias mitigation systems also have risks. If mitigation is too aggressive, respon
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
 
-We presented BiasScope, an inference-time framework for detecting and mitigating social bias in LLM outputs through prompt engineering and retrieval-augmented generation. In the current evaluation run (27 completed prompts), the mean composite bias score decreased from 0.205 (baseline) to 0.026 (mitigated), yielding an 87.4\% relative reduction. The system does not require model-weight access and offers a transparent pipeline where users can inspect both retrieval and mitigation outcomes. The side-by-side interface further supports practical analysis by showing baseline and mitigated responses with metric-level feedback.
+We presented BiasScope, an inference-time framework for detecting and mitigating social bias in LLM outputs through prompt engineering and retrieval-augmented generation. In the current evaluation run (26 completed prompts), the mean composite bias score decreased from 0.158 (baseline) to 0.044 (mitigated), yielding a 72.1\% relative reduction. The system does not require model-weight access and offers a transparent pipeline where users can inspect both retrieval and mitigation outcomes. The side-by-side interface further supports practical analysis by showing baseline and mitigated responses with metric-level feedback.
 
 Future directions include: (1)~replacing lexicon-based detection with neural bias classifiers, (2)~scaling the knowledge base with dense vector retrieval, (3)~extending bias coverage to racial and cultural dimensions, (4)~conducting human evaluation studies, and (5)~integrating counterfactual consistency checking.
 
