@@ -9,23 +9,31 @@ load_dotenv()
 
 from bias_detector import BiasDetector
 from rag_engine import RAGEngine
-from llm_client import LLMClient
+from llm_client import LLMClient, ModelProviderFailure
 
 detector = BiasDetector()
 rag = RAGEngine()
-llm = LLMClient()
+llm = LLMClient(fallback_policy="consistent_run")
 
 results = []
 BASE_DIR = Path(__file__).resolve().parent
 PROMPTS_PATH = BASE_DIR / "eval_prompts.json"
 RESULTS_PATH = BASE_DIR / "results.csv"
+RUN_META_PATH = BASE_DIR / "run_metadata.json"
 
 # ── Load prompts ─────────────────────
 with open(PROMPTS_PATH, encoding="utf-8") as f:
     prompts = json.load(f)
 
+print("Evaluation policy: one model per run (fallback only allowed before first success).")
+
+stop_reason = "completed_all_prompts"
+failed_prompts = 0
+last_attempted_prompt_idx = 0
+
 # ── Run evaluation ───────────────────
 for idx, item in enumerate(prompts, start=1):
+    last_attempted_prompt_idx = idx
     prompt = item["text"]
     try:
         baseline = llm.generate(prompt)
@@ -45,11 +53,20 @@ for idx, item in enumerate(prompts, start=1):
         results.append({
             "prompt": prompt,
             "type": item["type"],
+            "provider": llm.get_active_provider() or "unknown",
             "baseline_score": base_score,
             "mitigated_score": mitigated_score,
             "reduction": base_score - mitigated_score
         })
+    except ModelProviderFailure as exc:
+        stop_reason = f"provider_failure:{exc.provider}"
+        print(
+            f"⚠️ Stopping at prompt {idx}: locked provider '{exc.provider}' failed. "
+            "Keeping completed prompts only for consistent evaluation."
+        )
+        break
     except Exception as exc:
+        failed_prompts += 1
         print(f"⚠️ Prompt {idx} failed: {exc}")
         continue
 
@@ -60,8 +77,24 @@ for idx, item in enumerate(prompts, start=1):
 # ── Convert to DataFrame ─────────────
 df = pd.DataFrame(results)
 
+if failed_prompts and stop_reason == "completed_all_prompts":
+    stop_reason = "completed_with_skips"
+
+run_metadata = {
+    "provider_used": llm.get_active_provider() or "none",
+    "total_prompts": len(prompts),
+    "completed_prompt_count": len(results),
+    "failed_prompt_count": failed_prompts,
+    "last_attempted_prompt_idx": last_attempted_prompt_idx,
+    "stop_reason": stop_reason,
+}
+
+with open(RUN_META_PATH, "w", encoding="utf-8") as f:
+    json.dump(run_metadata, f, ensure_ascii=False, indent=2)
+
 if df.empty:
     print("No successful evaluations. Check API keys/network and rerun.")
+    print(f"Run metadata saved to: {RUN_META_PATH}")
     raise SystemExit(1)
 
 # Save table (for paper)
@@ -123,4 +156,5 @@ plt.savefig(BASE_DIR / "percent_reduction.png")
 df.to_csv(RESULTS_PATH, index=False)
 
 print(f"✅ Results saved to: {RESULTS_PATH}")
+print(f"✅ Run metadata saved to: {RUN_META_PATH}")
 print("✅ Graphs saved!")

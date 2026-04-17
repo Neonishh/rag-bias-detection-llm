@@ -8,9 +8,15 @@ import requests
 from groq_client import GroqClient
 
 
+class ModelProviderFailure(RuntimeError):
+    def __init__(self, provider: str, message: str):
+        super().__init__(message)
+        self.provider = provider
+
+
 
 class LLMClient:
-    def __init__(self):
+    def __init__(self, fallback_policy: str = "always"):
         self.base_url = os.environ.get(
             "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
         ).rstrip("/")
@@ -19,11 +25,16 @@ class LLMClient:
         self.timeout = int(os.environ.get("GEMINI_TIMEOUT", "60"))
         self.max_output_tokens = int(os.environ.get("GEMINI_MAX_OUTPUT_TOKENS", "1024"))
         self.max_continuations = int(os.environ.get("GEMINI_MAX_CONTINUATIONS", "1"))
+        self.fallback_policy = fallback_policy
+        self.active_provider = None
+        self.successful_calls = 0
 
         if not self.api_key:
             raise RuntimeError(
                 "Missing GEMINI_API_KEY. Add it to your .env file before starting the backend."
             )
+        if self.fallback_policy not in ("always", "consistent_run"):
+            raise ValueError("fallback_policy must be either 'always' or 'consistent_run'")
 
     # def generate(self, prompt: str, system_prompt: str = None) -> str:
     #     """
@@ -83,11 +94,47 @@ class LLMClient:
 
     #     return text
     def generate(self, prompt: str, system_prompt: str = None) -> str:
+        if self.fallback_policy == "consistent_run":
+            return self._generate_consistent(prompt, system_prompt)
+
         try:
             return self._call_gemini(prompt, system_prompt)
         except Exception as e:
             print(f"⚠️ Gemini failed ({e}), switching to Groq...")
             return self._call_groq(prompt, system_prompt)
+
+    def _generate_consistent(self, prompt: str, system_prompt: str = None) -> str:
+        provider_to_use = self.active_provider or "gemini"
+
+        try:
+            if provider_to_use == "gemini":
+                text = self._call_gemini(prompt, system_prompt)
+            else:
+                text = self._call_groq(prompt, system_prompt)
+        except Exception as exc:
+            # Allow fallback only before any successful response in this run.
+            if self.active_provider is None and provider_to_use == "gemini":
+                print(f"⚠️ Gemini unavailable at run start ({exc}), locking run to Groq.")
+                try:
+                    text = self._call_groq(prompt, system_prompt)
+                    self.active_provider = "groq"
+                    self.successful_calls += 1
+                    return text
+                except Exception as groq_exc:
+                    raise RuntimeError(
+                        "Both Gemini and Groq failed before evaluation could start."
+                    ) from groq_exc
+
+            provider_name = self.active_provider or provider_to_use
+            raise ModelProviderFailure(provider_name, str(exc)) from exc
+
+        if self.active_provider is None:
+            self.active_provider = provider_to_use
+        self.successful_calls += 1
+        return text
+
+    def get_active_provider(self):
+        return self.active_provider
 
 
     def _call_gemini(self, prompt: str, system_prompt: str = None) -> str:

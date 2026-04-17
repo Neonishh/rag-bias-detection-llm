@@ -1,0 +1,8 @@
+{
+  "provider_used": "groq",
+  "total_prompts": 26,
+  "completed_prompt_count": 26,
+  "failed_prompt_count": 0,
+  "last_attempted_prompt_idx": 26,
+  "stop_reason": "completed_all_prompts"
+}
