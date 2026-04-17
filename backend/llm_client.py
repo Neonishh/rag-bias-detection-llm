@@ -17,6 +17,8 @@ class LLMClient:
         self.model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.api_key = os.environ.get("GEMINI_API_KEY")
         self.timeout = int(os.environ.get("GEMINI_TIMEOUT", "60"))
+        self.max_output_tokens = int(os.environ.get("GEMINI_MAX_OUTPUT_TOKENS", "1024"))
+        self.max_continuations = int(os.environ.get("GEMINI_MAX_CONTINUATIONS", "1"))
 
         if not self.api_key:
             raise RuntimeError(
@@ -94,6 +96,32 @@ class LLMClient:
                 "You are a helpful assistant. Answer the user's question directly and naturally."
             )
 
+        full_text = ""
+        current_prompt = prompt
+
+        for _ in range(self.max_continuations + 1):
+            chunk, finish_reason = self._request_gemini(current_prompt, system_prompt)
+            if chunk:
+                full_text = self._merge_chunks(full_text, chunk)
+
+            if finish_reason != "MAX_TOKENS":
+                break
+
+            current_prompt = (
+                "Your previous answer was cut off due to output length. Continue exactly "
+                "from where it stopped without repeating any previous text.\n\n"
+                f"Original user request:\n{prompt}\n\n"
+                f"Previous partial answer:\n{full_text}\n\n"
+                "Continue now:"
+            )
+
+        if not full_text.strip():
+            raise RuntimeError("Gemini returned an empty response.")
+
+        return full_text.strip()
+
+    def _request_gemini(self, prompt: str, system_prompt: str):
+
         payload = {
             "system_instruction": {
                 "parts": [{"text": system_prompt}],
@@ -105,7 +133,7 @@ class LLMClient:
                 }
             ],
             "generationConfig": {
-                "maxOutputTokens": 512,
+                "maxOutputTokens": self.max_output_tokens,
             },
         }
 
@@ -132,15 +160,21 @@ class LLMClient:
 
         candidates = data.get("candidates", [])
         parts = []
+        finish_reason = ""
         if candidates:
             content = candidates[0].get("content", {})
             parts = content.get("parts", [])
+            finish_reason = str(candidates[0].get("finishReason", "")).upper()
         text = "".join(part.get("text", "") for part in parts).strip()
 
-        if not text:
-            raise RuntimeError("Gemini returned an empty response.")
+        return text, finish_reason
 
-        return text
+    def _merge_chunks(self, existing: str, new_chunk: str) -> str:
+        if not existing:
+            return new_chunk
+        if existing.endswith(("\n", " ")) or new_chunk.startswith((" ", ",", ".", ";", ":", "!", "?")):
+            return existing + new_chunk
+        return existing + "\n\n" + new_chunk
 
 
     def _call_groq(self, prompt: str, system_prompt: str = None) -> str:
